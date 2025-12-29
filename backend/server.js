@@ -1,0 +1,127 @@
+import express from "express";
+import dotenv, { parse } from "dotenv";
+import { initDB, sql } from "./config/db.js";
+dotenv.config();
+
+const app = express();
+app.use(express.json());
+
+app.use((req, res, next) => {
+  console.log("Hey we hit a req, the method is:", req.method);
+  next();
+});
+
+app.get("/", (req, res) => {
+  res.send("its working");
+});
+
+// app.listen(process.env.PORT, () => {
+//   console.log(`Server is running on port ${process.env.PORT}`);
+// });
+
+app.get("/api/transactions/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    console.log("User ID:", userId);
+    const transactions =
+      await sql`SELECT * FROM transactions WHERE user_id = ${userId}`;
+    res.status(200).json(transactions);
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+app.post("/api/transactions", async (req, res) => {
+  try {
+    const { title, amount, category, user_id } = req.body;
+
+    if (!title || !amount || !category || !user_id) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+    // Insert transaction into the database
+    const trasactions = await sql`
+    INSERT INTO transactions (user_id, title, amount, category) VALUES (${user_id}, ${title}, ${amount}, ${category})  RETURNING *
+    `;
+
+    res
+      .status(201)
+      .json({ message: "Transaction created successfully", trasactions });
+  } catch (error) {
+    console.error("Error creating transaction:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+app.delete("/api/transactions/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // string check
+    if (!isNaN(parseInt(userId))) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    const deletedTransactions = await sql`
+      DELETE FROM transactions 
+      WHERE user_id = ${userId}
+      RETURNING *
+    `;
+
+    if (deletedTransactions.length === 0) {
+      return res.status(404).json({
+        message: "No transactions found for this user",
+      });
+    }
+
+    res.status(200).json({
+      message: "Transaction(s) deleted successfully",
+      deletedCount: deletedTransactions.length,
+    });
+  } catch (error) {
+    console.error("Error deleting transaction:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+app.get("/api/transactions/summary/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const balanceResult = await sql`
+      SELECT 
+       COALESCE(SUM(amount), 0) AS balance 
+      FROM transactions
+      WHERE user_id = ${userId}
+    `;
+
+    const incomeResult = await sql`
+      SELECT 
+       COALESCE(SUM(amount), 0) AS income 
+      FROM transactions
+      WHERE user_id = ${userId} AND amount > 0
+    `;
+
+    const expenseResult = await sql`
+      SELECT 
+       COALESCE(SUM(amount), 0) AS expense 
+      FROM transactions
+      WHERE user_id = ${userId} AND amount < 0
+    `;
+
+    res.status(200).json({
+      balance: balanceResult[0].balance,
+      income: incomeResult[0].income,
+      expense: expenseResult[0].expense,
+    });
+  } catch (error) {
+    console.error("Error fetching transaction summary:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+initDB().then(() => {
+  app.listen(process.env.PORT, () => {
+    console.log("Server is up and running on PORT:", process.env.PORT);
+  });
+});
