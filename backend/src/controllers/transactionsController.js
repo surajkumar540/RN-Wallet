@@ -13,7 +13,7 @@ export async function getTransactionsByUserId(req, res) {
   }
 }
 
-export async function createTransaction() {
+export async function createTransaction(req, res) {
   try {
     const { title, amount, category, user_id } = req.body;
 
@@ -34,7 +34,7 @@ export async function createTransaction() {
   }
 }
 
-export async function deleteTransactionsByUserId() {
+export async function deleteTransactionsByUserId(req, res) {
   try {
     const { userId } = req.params;
 
@@ -65,7 +65,7 @@ export async function deleteTransactionsByUserId() {
   }
 }
 
-export async function getTransactionSummary() {
+export async function getTransactionSummary(req, res) {
   try {
     const { userId } = req.params;
 
