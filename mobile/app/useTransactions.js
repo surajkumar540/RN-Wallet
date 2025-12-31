@@ -5,7 +5,7 @@ import { Alert } from "react-native";
 // import { API_URL } from "../constants/api";
 
 // const API_URL = "https://wallet-api-cxqp.onrender.com/api";
-const API_URL = "http://localhost:5001/api";
+const API_URL = "https://rn-backend-y1y7.onrender.com/api";
 
 export const useTransactions = (userId) => {
   const [transactions, setTransactions] = useState([]);
