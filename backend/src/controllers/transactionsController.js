@@ -95,6 +95,9 @@ export async function getTransactionSummary(req, res) {
       income: incomeResult[0].income,
       expense: expenseResult[0].expense,
     });
+
+    //  console balalance
+    console.log("Balance:", balanceResult[0].balance);
   } catch (error) {
     console.error("Error fetching transaction summary:", error);
     res.status(500).json({ message: "Internal server error" });
