@@ -2,10 +2,9 @@
 
 import { useCallback, useState } from "react";
 import { Alert } from "react-native";
-// import { API_URL } from "../constants/api";
+import { API_URL } from "../constants/api";
 
 // const API_URL = "https://wallet-api-cxqp.onrender.com/api";
-const API_URL = "https://rn-backend-y1y7.onrender.com/api";
 
 export const useTransactions = (userId) => {
   const [transactions, setTransactions] = useState([]);
@@ -21,6 +20,8 @@ export const useTransactions = (userId) => {
     try {
       const response = await fetch(`${API_URL}/transactions/${userId}`);
       const data = await response.json();
+      console.log("Fetche data:", data);
+
       setTransactions(data);
     } catch (error) {
       console.error("Error fetching transactions:", error);
@@ -29,7 +30,7 @@ export const useTransactions = (userId) => {
 
   const fetchSummary = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/transactions/summary/user_37ZoJPaRTIWbU8YuQnug9qkY6oR`);
+      const response = await fetch(`${API_URL}/transactions/summary/${userId}`);
       const data = await response.json();
       console.log("Fetched summary data:", data);
       setSummary(data);
