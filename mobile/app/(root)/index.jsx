@@ -1,18 +1,11 @@
-import { SignedIn, SignedOut, useUser } from "@clerk/clerk-expo";
-import { Link, useRouter } from "expo-router";
-import {
-  Alert,
-  FlatList,
-  Image,
-  RefreshControl,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+
+import { useUser } from "@clerk/clerk-expo";
+import { useRouter } from "expo-router";
+import { Alert, FlatList, Image, RefreshControl, Text, TouchableOpacity, View } from "react-native";
 import { SignOutButton } from "@/components/SignOutButton";
-import { useTransactions } from "../useTransactions";
+import { useTransactions } from "../../hooks/useTransactions";
 import { useEffect, useState } from "react";
-// import PageLoader from "../../components/PageLoader";
+import PageLoader from "../../components/PageLoader";
 import { styles } from "../../assets/styles/home.style";
 import { Ionicons } from "@expo/vector-icons";
 import { BalanceCard } from "../../components/BalanceCard";
@@ -24,9 +17,9 @@ export default function Page() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
-  const userId = user?.id;
-  const { transactions, summary, isLoading, loadData, deleteTransaction } =
-    useTransactions(userId);
+  const { transactions, summary, isLoading, loadData, deleteTransaction } = useTransactions(
+    user.id
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -34,29 +27,27 @@ export default function Page() {
     setRefreshing(false);
   };
 
- useEffect(() => {
-  if (userId) {
+  useEffect(() => {
     loadData();
-  }
-}, [userId]);
+  }, [loadData]);
+
+  const handleDelete = (transactionId) => {
+  Alert.alert(
+    "Delete Transaction",
+    "Are you sure you want to delete this transaction?",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => deleteTransaction(transactionId),
+      },
+    ]
+  );
+};
 
 
-  const handleDelete = (id) => {
-    Alert.alert(
-      "Delete Transaction",
-      "Are you sure you want to delete this transaction?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => deleteTransaction(id),
-        },
-      ]
-    );
-  };
-
-  // if (isLoading && !refreshing) return <PageLoader />;
+  if (isLoading && !refreshing) return <PageLoader />;
 
   return (
     <View style={styles.container}>
@@ -79,10 +70,7 @@ export default function Page() {
           </View>
           {/* RIGHT */}
           <View style={styles.headerRight}>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => router.push("/create")}
-            >
+            <TouchableOpacity style={styles.addButton} onPress={() => router.push("/create")}>
               <Ionicons name="add" size={20} color="#FFF" />
               <Text style={styles.addButtonText}>Add</Text>
             </TouchableOpacity>
@@ -103,14 +91,10 @@ export default function Page() {
         style={styles.transactionsList}
         contentContainerStyle={styles.transactionsListContent}
         data={transactions}
-        renderItem={({ item }) => (
-          <TransactionItem item={item} onDelete={handleDelete} />
-        )}
+        renderItem={({ item }) => <TransactionItem item={item} onDelete={handleDelete} />}
         ListEmptyComponent={<NoTransactionsFound />}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       />
     </View>
   );

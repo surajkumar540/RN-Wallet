@@ -34,31 +34,48 @@ export async function createTransaction(req, res) {
   }
 }
 
+// export async function deleteTransactionsByUserId(req, res) {
+//   try {
+//     const { userId } = req.params;
+
+//     // ✅ Validate userId (Clerk user id is a string)
+//     if (!userId || typeof userId !== "string") {
+//       return res.status(400).json({ message: "Invalid user ID" });
+//     }
+
+//     const result = await sql`
+//       DELETE FROM transactions
+//       WHERE user_id = ${userId}
+//       RETURNING *
+//     `;
+
+//     if (result.rows.length === 0) {
+//       return res.status(404).json({
+//         message: "No transactions found for this user",
+//       });
+//     }
+
+//     res.status(200).json({
+//       message: "Transaction(s) deleted successfully",
+//       deletedCount: result.rows.length,
+//     });
+//   } catch (error) {
+//     console.error("Error deleting transaction:", error);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// }
 export async function deleteTransactionsByUserId(req, res) {
   try {
     const { userId } = req.params;
-
-    // string check
-    if (!isNaN(parseInt(userId))) {
-      return res.status(400).json({ message: "Invalid user ID" });
+    const result = await sql`
+      DELETE FROM transactions
+      WHERE user_id = ${userId}
+      RETURNING *
+    `;
+    if (result.length === 0) {
+      return res.status(404).json({ message: "Transaction not found" });
     }
-
-    const deletedTransactions = await sql`
-          DELETE FROM transactions 
-          WHERE user_id = ${userId}
-          RETURNING *
-        `;
-
-    if (deletedTransactions.length === 0) {
-      return res.status(404).json({
-        message: "No transactions found for this user",
-      });
-    }
-
-    res.status(200).json({
-      message: "Transaction(s) deleted successfully",
-      deletedCount: deletedTransactions.length,
-    });
+    res.status(200).json({ message: "Transaction deleted successfully" });
   } catch (error) {
     console.error("Error deleting transaction:", error);
     res.status(500).json({ message: "Internal server error" });

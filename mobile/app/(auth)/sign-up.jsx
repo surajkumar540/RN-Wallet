@@ -1,12 +1,13 @@
-import { useState } from "react";
-import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useState, useRef, useEffect } from "react";
+import { Text, TextInput, TouchableOpacity, View, Animated } from "react-native";
 import { useSignUp } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
-import { styles } from "../../assets/styles/auth.style.js";
+import { styles } from "@/assets/styles/auth.style.js";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS } from "../../constants/colors.js";
+import { COLORS } from "../../constants/colors";
 import { Image } from "expo-image";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { LinearGradient } from "expo-linear-gradient";
 
 export default function SignUpScreen() {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -17,171 +18,397 @@ export default function SignUpScreen() {
   const [pendingVerification, setPendingVerification] = useState(false);
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Handle submission of sign-up form
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const codeBoxAnim = useRef(new Animated.Value(0)).current;
+  const spinValue = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Entrance animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  useEffect(() => {
+    if (error) {
+      // Shake animation on error
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 10, duration: 100, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 100, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 10, duration: 100, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+      ]).start();
+    }
+  }, [error]);
+
+  useEffect(() => {
+    if (pendingVerification) {
+      // Code box entrance animation
+      Animated.spring(codeBoxAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [pendingVerification]);
+
+  useEffect(() => {
+    if (isLoading) {
+      // Spinning animation for loading
+      Animated.loop(
+        Animated.timing(spinValue, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        })
+      ).start();
+    } else {
+      spinValue.setValue(0);
+    }
+  }, [isLoading]);
+
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
   const onSignUpPress = async () => {
     if (!isLoaded) return;
+    setIsLoading(true);
+    setError("");
 
-    // Start sign-up process using email and password provided
     try {
       await signUp.create({
         emailAddress,
         password,
       });
 
-      // Send user an email with verification code
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-
-      // Set 'pendingVerification' to true to display second form
-      // and capture OTP code
       setPendingVerification(true);
     } catch (err) {
-      const clerkError = err?.errors?.[0];
-
-      if (!clerkError) {
-        setError("Something went wrong. Please try again.");
-        return;
+      if (err.errors?.[0]?.code === "form_identifier_exists") {
+        setError("That email address is already in use. Please try another.");
+      } else if (err.errors?.[0]?.code === "form_password_pwned") {
+        setError("This password is too common. Please use a stronger password.");
+      } else if (err.errors?.[0]?.message) {
+        setError(err.errors[0].message);
+      } else {
+        setError("An error occurred. Please try again.");
       }
-
-      switch (clerkError.code) {
-        case "form_identifier_exists":
-          setError("This email is already registered. Try logging in instead.");
-          break;
-
-        case "form_password_pwned":
-          setError(
-            "This password was found in a data breach. Please choose a stronger, unique password."
-          );
-          break;
-
-        case "form_password_too_short":
-          setError("Password must be at least 8 characters long.");
-          break;
-
-        case "form_password_not_strong_enough":
-          setError(
-            "Password must include uppercase, lowercase, number and special character."
-          );
-          break;
-
-        default:
-          // fallback to Clerk’s own message (BEST PRACTICE)
-          setError(clerkError.long_message || clerkError.message);
-      }
+      console.log(err);
+    } finally {
+      setIsLoading(false);
     }
   };
-  
-  // Handle submission of verification form
+
   const onVerifyPress = async () => {
     if (!isLoaded) return;
+    setIsLoading(true);
+    setError("");
 
     try {
-      // Use the code the user provided to attempt verification
       const signUpAttempt = await signUp.attemptEmailAddressVerification({
         code,
       });
 
-      // If verification was completed, set the session to active
-      // and redirect the user
       if (signUpAttempt.status === "complete") {
         await setActive({ session: signUpAttempt.createdSessionId });
         router.replace("/");
       } else {
-        // If the status is not complete, check why. User may need to
-        // complete further steps.
         console.error(JSON.stringify(signUpAttempt, null, 2));
+        setError("Verification failed. Please try again.");
       }
     } catch (err) {
-      // See https://clerk.com/docs/custom-flows/error-handling
-      // for more info on error handling
+      setError("Invalid verification code. Please try again.");
       console.error(JSON.stringify(err, null, 2));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resendCode = async () => {
+    try {
+      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+      setError("");
+      // Could add a success toast here
+    } catch (err) {
+      setError("Failed to resend code. Please try again.");
     }
   };
 
   if (pendingVerification) {
     return (
-      <View style={styles.verificationContainer}>
-        <Text style={styles.verificationTitle}>Verify your email</Text>
+      <LinearGradient
+        colors={[COLORS.background, "#FFF8F3", COLORS.background]}
+        style={{ flex: 1 }}
+      >
+        <Animated.View
+          style={[
+            styles.verificationContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ scale: codeBoxAnim }],
+            },
+          ]}
+        >
+          {/* Email sent illustration */}
+          <Animated.View
+            style={{
+              transform: [
+                {
+                  scale: codeBoxAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.5, 1],
+                  }),
+                },
+              ],
+            }}
+          >
+            <View style={styles.iconCircle}>
+              <Ionicons name="mail-outline" size={60} color={COLORS.primary} />
+            </View>
+          </Animated.View>
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={20} color={COLORS.expense} />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={() => setError("")}>
-              <Ionicons name="close" size={20} color={COLORS.textLight} />
-            </TouchableOpacity>
-          </View>
-        ) : null}
+          <Text style={styles.verificationTitle}>Verify your email</Text>
+          <Text style={styles.verificationSubtitle}>
+            We've sent a 6-digit code to{"\n"}
+            <Text style={{ fontWeight: "600", color: COLORS.primary }}>
+              {emailAddress}
+            </Text>
+          </Text>
 
-        <TextInput
-          style={[styles.verificationInput, error && styles.errorInput]}
-          value={code}
-          placeholder="Enter your verification code"
-          placeholderTextColor="#9A8478"
-          onChangeText={(code) => setCode(code)}
-        />
+          {error ? (
+            <Animated.View
+              style={[
+                styles.errorBox,
+                { transform: [{ translateX: shakeAnim }] },
+              ]}
+            >
+              <Ionicons name="alert-circle" size={20} color={COLORS.expense} />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity onPress={() => setError("")}>
+                <Ionicons name="close" size={20} color={COLORS.expense} />
+              </TouchableOpacity>
+            </Animated.View>
+          ) : null}
 
-        <TouchableOpacity onPress={onVerifyPress} style={styles.button}>
-          <Text style={styles.buttonText}>Verify</Text>
-        </TouchableOpacity>
-      </View>
+          <TextInput
+            style={[styles.verificationInput, error && styles.errorInput]}
+            value={code}
+            placeholder="000000"
+            placeholderTextColor="#D4C4B8"
+            onChangeText={(code) => setCode(code)}
+            keyboardType="number-pad"
+            maxLength={6}
+          />
+
+          <TouchableOpacity
+            onPress={onVerifyPress}
+            style={[styles.button, isLoading && styles.buttonDisabled]}
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={[COLORS.primary, "#D97757"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.buttonGradient}
+            >
+              {isLoading ? (
+                <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                  <Ionicons name="sync" size={24} color={COLORS.white} />
+                </Animated.View>
+              ) : (
+                <Text style={styles.buttonText}>Verify Email</Text>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.resendButton}
+            onPress={resendCode}
+          >
+            <Ionicons name="refresh" size={18} color={COLORS.primary} />
+            <Text style={styles.resendText}>Didn't receive code? Resend</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => setPendingVerification(false)}
+          >
+            <Ionicons name="arrow-back" size={18} color={COLORS.textLight} />
+            <Text style={styles.backText}>Back to sign up</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </LinearGradient>
     );
   }
 
   return (
-    <KeyboardAwareScrollView
+    <LinearGradient
+      colors={[COLORS.background, "#FFF8F3", COLORS.background]}
       style={{ flex: 1 }}
-      contentContainerStyle={{ flexGrow: 1 }}
-      enableOnAndroid={true}
-      enableAutomaticScroll={true}
     >
-      <View style={styles.container}>
-        <Image
-          source={require("../../assets/images/revenue-i2.png")}
-          style={styles.illustration}
-        />
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1 }}
+        enableOnAndroid={true}
+        enableAutomaticScroll={true}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View
+          style={[
+            styles.container,
+            {
+              opacity: fadeAnim,
+              transform: [
+                { translateY: slideAnim },
+                { scale: scaleAnim },
+              ],
+            },
+          ]}
+        >
+          <Animated.View
+            style={{
+              transform: [
+                {
+                  scale: scaleAnim.interpolate({
+                    inputRange: [0.9, 1],
+                    outputRange: [0.8, 1],
+                  }),
+                },
+              ],
+            }}
+          >
+            <Image
+              source={require("../../assets/images/revenue-i2.png")}
+              style={styles.illustration}
+            />
+          </Animated.View>
 
-        <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Join us and start managing your finances</Text>
 
-        {error ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={20} color={COLORS.expense} />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity onPress={() => setError("")}>
-              <Ionicons name="close" size={20} color={COLORS.textLight} />
+          {error ? (
+            <Animated.View
+              style={[
+                styles.errorBox,
+                { transform: [{ translateX: shakeAnim }] },
+              ]}
+            >
+              <Ionicons name="alert-circle" size={20} color={COLORS.expense} />
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity onPress={() => setError("")}>
+                <Ionicons name="close" size={20} color={COLORS.expense} />
+              </TouchableOpacity>
+            </Animated.View>
+          ) : null}
+
+          <View style={styles.inputWrapper}>
+            <Ionicons
+              name="mail-outline"
+              size={20}
+              color={COLORS.textLight}
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={[styles.inputWithIcon, error && styles.errorInput]}
+              autoCapitalize="none"
+              value={emailAddress}
+              placeholderTextColor="#9A8478"
+              placeholder="Enter email"
+              onChangeText={(email) => setEmailAddress(email)}
+              keyboardType="email-address"
+            />
+          </View>
+
+          <View style={styles.inputWrapper}>
+            <Ionicons
+              name="lock-closed-outline"
+              size={20}
+              color={COLORS.textLight}
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={[styles.inputWithIcon, error && styles.errorInput]}
+              value={password}
+              placeholder="Enter password (min 8 characters)"
+              placeholderTextColor="#9A8478"
+              secureTextEntry={!showPassword}
+              onChangeText={(password) => setPassword(password)}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              style={styles.eyeIcon}
+            >
+              <Ionicons
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={20}
+                color={COLORS.textLight}
+              />
             </TouchableOpacity>
           </View>
-        ) : null}
 
-        <TextInput
-          style={[styles.input, error && styles.errorInput]}
-          autoCapitalize="none"
-          value={emailAddress}
-          placeholderTextColor="#9A8478"
-          placeholder="Enter email"
-          onChangeText={(email) => setEmailAddress(email)}
-        />
-
-        <TextInput
-          style={[styles.input, error && styles.errorInput]}
-          value={password}
-          placeholder="Enter password"
-          placeholderTextColor="#9A8478"
-          secureTextEntry={true}
-          onChangeText={(password) => setPassword(password)}
-        />
-
-        <TouchableOpacity style={styles.button} onPress={onSignUpPress}>
-          <Text style={styles.buttonText}>Sign Up</Text>
-        </TouchableOpacity>
-
-        <View style={styles.footerContainer}>
-          <Text style={styles.footerText}>Already have an account?</Text>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.linkText}>Sign in</Text>
+          <TouchableOpacity
+            style={[styles.button, isLoading && styles.buttonDisabled]}
+            onPress={onSignUpPress}
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={[COLORS.primary, "#D97757"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.buttonGradient}
+            >
+              {isLoading ? (
+                <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                  <Ionicons name="sync" size={24} color={COLORS.white} />
+                </Animated.View>
+              ) : (
+                <Text style={styles.buttonText}>Sign Up</Text>
+              )}
+            </LinearGradient>
           </TouchableOpacity>
-        </View>
-      </View>
-    </KeyboardAwareScrollView>
+
+          <View style={styles.dividerContainer}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.divider} />
+          </View>
+
+          <View style={styles.footerContainer}>
+            <Text style={styles.footerText}>Already have an account?</Text>
+            <TouchableOpacity onPress={() => router.back()}>
+              <Text style={styles.linkText}>Sign in</Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </KeyboardAwareScrollView>
+    </LinearGradient>
   );
 }

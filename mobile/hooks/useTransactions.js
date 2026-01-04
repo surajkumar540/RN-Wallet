@@ -5,13 +5,14 @@ import { Alert } from "react-native";
 import { API_URL } from "../constants/api";
 
 // const API_URL = "https://wallet-api-cxqp.onrender.com/api";
+// const API_URL = "http://localhost:5001/api";
 
 export const useTransactions = (userId) => {
   const [transactions, setTransactions] = useState([]);
   const [summary, setSummary] = useState({
     balance: 0,
     income: 0,
-    expense: 0,
+    expenses: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -20,8 +21,6 @@ export const useTransactions = (userId) => {
     try {
       const response = await fetch(`${API_URL}/transactions/${userId}`);
       const data = await response.json();
-      console.log("Fetche data:", data);
-
       setTransactions(data);
     } catch (error) {
       console.error("Error fetching transactions:", error);
@@ -32,7 +31,6 @@ export const useTransactions = (userId) => {
     try {
       const response = await fetch(`${API_URL}/transactions/summary/${userId}`);
       const data = await response.json();
-      console.log("Fetched summary data:", data);
       setSummary(data);
     } catch (error) {
       console.error("Error fetching summary:", error);
@@ -53,21 +51,33 @@ export const useTransactions = (userId) => {
     }
   }, [fetchTransactions, fetchSummary, userId]);
 
-  const deleteTransaction = async (id) => {
-    try {
-      const response = await fetch(`${API_URL}/transactions/${id}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("Failed to delete transaction");
+const deleteTransaction = async (id) => {
+  console.log("Deleting transaction with id:", id);
 
-      // Refresh data after deletion
-      loadData();
-      Alert.alert("Success", "Transaction deleted successfully");
-    } catch (error) {
-      console.error("Error deleting transaction:", error);
-      Alert.alert("Error", error.message);
+  try {
+    const response = await fetch(`${API_URL}/transactions/${id}`, {
+      method: 'DELETE',
+    });
+
+    // Log the response details
+    console.log("Response status:", response.status);
+    console.log("Response ok:", response.ok);
+    
+    // Try to get the response body
+    const responseText = await response.text();
+    console.log("Response body:", responseText);
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete transaction: ${response.status} - ${responseText}`);
     }
-  };
+
+    await loadData();
+    Alert.alert("Success", "Transaction deleted successfully");
+  } catch (error) {
+    console.error("Error deleting transaction:", error);
+    Alert.alert("Error", error.message);
+  }
+};
 
   return { transactions, summary, isLoading, loadData, deleteTransaction };
 };
-
-export default useTransactions;
